@@ -16,4 +16,4 @@ const otdataSchema = new mongoose.Schema(
 	{ timestamps: true, strict: false }
 );
 
-exports.Otdata = mongoose.model("otd", otdataSchema);
+module.exports = mongoose.model("otd", otdataSchema);

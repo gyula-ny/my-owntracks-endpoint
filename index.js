@@ -1,10 +1,21 @@
 const port = Number(process.env.HTTPPORT) || 4500;
 const http = require("http");
 const mongoose = require("mongoose");
-mongoose.connect(process.env.CONNECTION || "mongodb://localhost/ottest");
+mongoose.connect(
+	process.env.CONNECTION || "mongodb://localhost/ottest",
+	{ useNewUrlParser: true }
+);
 // When using unix sockets uencode: "mongodb://%2Ftmp%2Fmongodb-27017.sock/ottest"
 const Otdata = require("./schema");
 const db = mongoose.connection;
+
+const ok = req => value => {
+	if (value) {
+		return Promise.resolve(req);
+	}
+	return Promise.reject(new Error("Precondition failed"));
+};
+
 const initServer = httpServer =>
 	httpServer.listen(port, () => {
 		return console.log(`Listening on ${port}`);
@@ -16,9 +27,10 @@ const reply = (res, status = 200, contentType = "application/json", content = "[
 	return res.end(content);
 };
 
+// Reflect.construct is the new new (eslint-plugin-fp)
 const reqOnReadable = req =>
 	Reflect.construct(Promise, [
-		(resolve, reject) => {
+		(resolve, _reject) => {
 			req.once("readable", () => {
 				return resolve(req);
 			});
@@ -28,7 +40,7 @@ const reqOnReadable = req =>
 const parse = raw =>
 	Reflect.construct(Promise, [
 		(resolve, reject) => {
-			console.log(raw);
+			// console.log(raw);
 			try {
 				const p = JSON.parse(raw.toString("utf-8"));
 				return resolve(p);
@@ -47,12 +59,16 @@ const save = obj => {
 const read = req => req.read();
 
 const handle = (req, res) =>
-	reqOnReadable(req)
+	ok(req)(req.method === "POST")
+		.then(reqOnReadable)
 		.then(read)
 		.then(parse)
 		.then(save)
-		.then(saved => reply(res))
-		.catch(console.error);
+		.then(_saved => reply(res))
+		.catch(e => {
+			console.error(e);
+			return reply(res, 400, "text/plain", "I can't get no satisfaction");
+		});
 
 const httpServer = http.createServer(handle);
 db.once("open", () => {
